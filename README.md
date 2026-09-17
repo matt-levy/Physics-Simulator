@@ -1,6 +1,6 @@
 # Classical Mechanics Simulator
 
-A small Next.js + React + TypeScript foundation for building a 2D classical mechanics simulator. The physics has intentionally not been implemented: this repository provides the places to write it yourself.
+A small Next.js + React + TypeScript foundation for building a 2D classical mechanics simulator. The physics has intentionally not been implemented.
 
 ## Run locally
 
