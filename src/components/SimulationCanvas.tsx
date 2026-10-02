@@ -8,6 +8,7 @@ import { ParticleInspector, type ParticleSnapshot } from "./ParticleInspector";
 
 const FIXED_TIMESTEP_SECONDS = 1 / 60;
 const MAX_STEPS_PER_FRAME = 5;
+const GRID_SPACING_PIXELS = 50;
 
 function createParticleSnapshot(
   particle: Particle | undefined,
@@ -24,6 +25,46 @@ function createParticleSnapshot(
     acceleration: { ...particle.acceleration },
     accumulatedForce: { ...particle.accumulatedForce },
   };
+}
+
+function drawGrid(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): void {
+  context.save();
+  context.strokeStyle = "#e5e7eb";
+  context.lineWidth = 1;
+  context.beginPath();
+
+  for (let x = 0; x <= width; x += GRID_SPACING_PIXELS) {
+    context.moveTo(x + 0.5, 0);
+    context.lineTo(x + 0.5, height);
+  }
+
+  for (let y = 0; y <= height; y += GRID_SPACING_PIXELS) {
+    context.moveTo(0, y + 0.5);
+    context.lineTo(width, y + 0.5);
+  }
+
+  context.stroke();
+  context.restore();
+}
+
+function drawWorld(
+  context: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  world: World,
+): void {
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  drawGrid(context, canvas.width, canvas.height);
+
+  for (const particle of world.particles) {
+    context.beginPath();
+    context.arc(particle.position.x, particle.position.y, 5, 0, 2 * Math.PI);
+    context.fillStyle = "blue";
+    context.fill();
+  }
 }
 
 export function SimulationCanvas() {
@@ -48,6 +89,15 @@ export function SimulationCanvas() {
     useState<ParticleSnapshot | null>(() =>
       createParticleSnapshot(world.particles[0]),
     );
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+
+    if (canvas && context) {
+      drawWorld(context, canvas, world);
+    }
+  }, [world]);
 
   useEffect(() => {
     if (!isRunning) {
@@ -77,29 +127,11 @@ export function SimulationCanvas() {
 
       previousTimestamp = timestamp;
 
-      const context = canvasRef.current?.getContext("2d");
+      const canvas = canvasRef.current;
+      const context = canvas?.getContext("2d");
 
-      if (context && canvasRef.current) {
-        context.clearRect(
-          0,
-          0,
-          canvasRef.current.width,
-          canvasRef.current.height,
-        );
-        // TODO: Read particle positions from worldRef.current and draw them here.\\
-        const particles = world.particles;
-        for (const particle of particles) {
-          context.beginPath();
-          context.arc(
-            particle.position.x,
-            particle.position.y,
-            5,
-            0,
-            2 * Math.PI,
-          );
-          context.fillStyle = "blue";
-          context.fill();
-        }
+      if (canvas && context) {
+        drawWorld(context, canvas, world);
       }
 
       // React displays a copy; the World remains the source of truth.
@@ -124,6 +156,10 @@ export function SimulationCanvas() {
         isRunning={isRunning}
         onStart={() => setIsRunning(true)}
         onStop={() => setIsRunning(false)}
+        reset={() => {
+          world.reset();
+          setParticleSnapshot(createParticleSnapshot(world.particles[0]));
+        }}
       />
       <ParticleInspector particle={particleSnapshot} />
     </section>

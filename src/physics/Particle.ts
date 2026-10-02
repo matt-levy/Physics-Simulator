@@ -45,4 +45,30 @@ export class Particle {
     // Reset accumulated force after update
     this.accumulatedForce = { x: 0, y: 0 };
   }
+
+  // Set methods for position, velocity, acceleration, and accumulated force
+  setPosition(position: Vector2): void {
+    this.position = position;
+  }
+
+  setVelocity(velocity: Vector2): void {
+    this.velocity = velocity;
+  }
+
+  setAcceleration(acceleration: Vector2): void {
+    this.acceleration = acceleration;
+  }
+
+  setAccumulatedForce(accumulatedForce: Vector2): void {
+    this.accumulatedForce = accumulatedForce;
+  }
 }
+
+export const defaultParticle = new Particle(
+  1,
+  1, // mass
+  { x: 400, y: 250 }, // position
+  { x: 0, y: 0 }, // velocity
+  { x: 0, y: 0 }, // acceleration
+  { x: 1000, y: 0 }, // accumulated force
+);

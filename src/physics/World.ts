@@ -1,4 +1,5 @@
 import type { Particle } from "./Particle";
+import { defaultParticle } from "./Particle";
 
 export class World {
   particles: Particle[] = [];
@@ -13,5 +14,14 @@ export class World {
     for (const particle of this.particles) {
       particle.update(dt);
     }
+  }
+
+  reset(): void {
+    this.particles.forEach((particle) => {
+      particle.setPosition(defaultParticle.position);
+      particle.setVelocity(defaultParticle.velocity);
+      particle.setAcceleration(defaultParticle.acceleration);
+      particle.setAccumulatedForce(defaultParticle.accumulatedForce);
+    });
   }
 }
