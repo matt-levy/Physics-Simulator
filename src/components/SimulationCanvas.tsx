@@ -5,6 +5,7 @@ import { World } from "@/physics/World";
 import { SimulationControls } from "./SimulationControls";
 import { Particle } from "@/physics/Particle";
 import { ParticleInspector, type ParticleSnapshot } from "./ParticleInspector";
+import { Vector2 } from "@/physics/Vector2";
 
 const FIXED_TIMESTEP_SECONDS = 1 / 60;
 const MAX_STEPS_PER_FRAME = 5;
@@ -89,6 +90,7 @@ export function SimulationCanvas() {
     useState<ParticleSnapshot | null>(() =>
       createParticleSnapshot(world.particles[0]),
     );
+  const activeForceRef = useRef<Vector2>({ x: 0, y: 0 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -119,6 +121,10 @@ export function SimulationCanvas() {
           accumulatedTime >= FIXED_TIMESTEP_SECONDS &&
           stepsThisFrame < MAX_STEPS_PER_FRAME
         ) {
+          const activeForce = activeForceRef.current;
+          if (activeForce.x !== 0 || activeForce.y !== 0) {
+            world.particles[0]?.applyForce(activeForce);
+          }
           world.update(FIXED_TIMESTEP_SECONDS);
           accumulatedTime -= FIXED_TIMESTEP_SECONDS;
           stepsThisFrame += 1;
@@ -157,8 +163,23 @@ export function SimulationCanvas() {
         onStart={() => setIsRunning(true)}
         onStop={() => setIsRunning(false)}
         reset={() => {
+          activeForceRef.current = { x: 0, y: 0 };
           world.reset();
           setParticleSnapshot(createParticleSnapshot(world.particles[0]));
+        }}
+        onApplyForce={(forceX: number, forceY: number) => {
+          activeForceRef.current = {
+            x: activeForceRef.current.x + forceX,
+            y: activeForceRef.current.y + forceY,
+          };
+
+          if (!isRunning) {
+            const snapshot = createParticleSnapshot(world.particles[0]);
+            if (snapshot) {
+              snapshot.accumulatedForce = { ...activeForceRef.current };
+            }
+            setParticleSnapshot(snapshot);
+          }
         }}
       />
       <ParticleInspector particle={particleSnapshot} />
