@@ -7,7 +7,7 @@ type SimulationControlsProps = {
   onStart: () => void;
   onStop: () => void;
   reset?: () => void;
-  onApplyForce?: (forceX: number, forceY: number) => void;
+  onApplyForce?: (forceX: number, forceY: number, duration: number) => void;
 };
 
 export function SimulationControls({
@@ -19,21 +19,30 @@ export function SimulationControls({
 }: SimulationControlsProps) {
   const [forceX, setForceX] = useState<string>("");
   const [forceY, setForceY] = useState<string>("");
+  const [duration, setDuration] = useState<string>("");
 
   const handleApplyForce = () => {
     let forceValueX = parseFloat(forceX);
     let forceValueY = parseFloat(forceY);
+    let durationValue = parseFloat(duration);
+
     if (isNaN(forceValueX)) {
       forceValueX = 0;
     }
     if (isNaN(forceValueY)) {
       forceValueY = 0;
     }
-    if (!isNaN(forceValueX) && !isNaN(forceValueY) && onApplyForce) {
-      onApplyForce(forceValueX, forceValueY);
+    if (isNaN(durationValue)) {
+      durationValue = 1 / 60; // Minimum step duration
     }
-    setForceX(""); // Clear the input after applying the force
-    setForceY(""); // Clear the input after applying the force
+    if (
+      !isNaN(forceValueX) &&
+      !isNaN(forceValueY) &&
+      !isNaN(durationValue) &&
+      onApplyForce
+    ) {
+      onApplyForce(forceValueX, forceValueY, durationValue);
+    }
   };
 
   return (
@@ -48,9 +57,11 @@ export function SimulationControls({
         Reset
       </button>
       <p>Apply Force</p>
+      <p>Positive x points right; positive y points up.</p>
       <input
         type="text"
         title="x"
+        aria-label="Force x component"
         value={forceX}
         onChange={(e) => setForceX(e.target.value)}
         placeholder="400"
@@ -58,9 +69,18 @@ export function SimulationControls({
       <input
         type="text"
         title="y"
+        aria-label="Force y component (positive is up)"
         value={forceY}
         onChange={(e) => setForceY(e.target.value)}
         placeholder="400"
+      />
+      <input
+        type="text"
+        title="duration"
+        aria-label="Duration that the force should be applied"
+        value={duration}
+        onChange={(e) => setDuration(e.target.value)}
+        placeholder="1"
       />
       <button type="button" onClick={handleApplyForce}>
         Apply Force

@@ -6,7 +6,7 @@ export type ParticleSnapshot = {
   position: Vector2;
   velocity: Vector2;
   acceleration: Vector2;
-  accumulatedForce: Vector2;
+  appliedForce: Vector2;
 };
 
 type ParticleInspectorProps = {
@@ -41,8 +41,8 @@ export function ParticleInspector({ particle }: ParticleInspectorProps) {
         <dd>{formatVector(particle.velocity)}</dd>
         <dt>Acceleration</dt>
         <dd>{formatVector(particle.acceleration)}</dd>
-        <dt>Net force</dt>
-        <dd>{formatVector(particle.accumulatedForce)}</dd>
+        <dt>Applied force</dt>
+        <dd>{formatVector(particle.appliedForce)}</dd>
       </dl>
     </section>
   );

@@ -9,6 +9,8 @@ export class Particle {
     public velocity: Vector2,
     public acceleration: Vector2,
     public accumulatedForce: Vector2,
+    public radius = 5,
+    public lastAppliedForce: Vector2 = { x: 0, y: 0 },
   ) {
     this.id = id;
     this.mass = mass;
@@ -16,6 +18,8 @@ export class Particle {
     this.velocity = velocity;
     this.acceleration = acceleration;
     this.accumulatedForce = accumulatedForce;
+    this.radius = radius;
+    this.lastAppliedForce = lastAppliedForce;
   }
 
   // TODO: Add applyForce and particle-update behavior.
@@ -28,10 +32,11 @@ export class Particle {
   }
 
   update(dt: number): void {
-    // Update acceleration based on accumulated forces and mass
+    // Preserve the force used by this step for display and calculate acceleration.
+    this.lastAppliedForce = { ...this.accumulatedForce };
     this.acceleration = {
-      x: this.accumulatedForce.x / this.mass,
-      y: this.accumulatedForce.y / this.mass,
+      x: this.lastAppliedForce.x / this.mass,
+      y: this.lastAppliedForce.y / this.mass,
     };
     this.velocity = {
       x: this.velocity.x + this.acceleration.x * dt,
@@ -42,7 +47,8 @@ export class Particle {
       y: this.position.y + this.velocity.y * dt,
     };
 
-    // Reset accumulated force after update
+    // Force is accumulated anew for each physics step; acceleration remains
+    // visible until the next update recalculates it.
     this.accumulatedForce = { x: 0, y: 0 };
   }
 
