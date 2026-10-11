@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { World } from "@/physics/World";
 import { SimulationControls } from "./SimulationControls";
+import { ParticleControls } from "./ParticleControls";
 import { Particle } from "@/physics/Particle";
 import { ParticleInspector, type ParticleSnapshot } from "./ParticleInspector";
 import { Vector2 } from "@/physics/Vector2";
@@ -14,6 +15,7 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 500;
 
 type TimedForce = {
+  particleId: number;
   force: Vector2;
   remainingDuration: number;
 };
@@ -28,13 +30,7 @@ function sumForces(forces: TimedForce[]): Vector2 {
   );
 }
 
-function createParticleSnapshot(
-  particle: Particle | undefined,
-): ParticleSnapshot | null {
-  if (particle === undefined) {
-    return null;
-  }
-
+function createParticleSnapshot(particle: Particle): ParticleSnapshot {
   return {
     id: particle.id,
     mass: particle.mass,
@@ -43,6 +39,10 @@ function createParticleSnapshot(
     acceleration: { ...particle.acceleration },
     appliedForce: { ...particle.lastAppliedForce },
   };
+}
+
+function createParticleSnapshots(particles: Particle[]): ParticleSnapshot[] {
+  return particles.map(createParticleSnapshot);
 }
 
 function drawGrid(
@@ -114,15 +114,14 @@ export function SimulationCanvas() {
       { x: 1000, y: 0 }, // accumulated force
     );
     initialWorld.addParticle(initialParticle);
-
     return initialWorld;
   });
+  const worldRef = useRef(world);
 
   const [isRunning, setIsRunning] = useState(false);
-  const [particleSnapshot, setParticleSnapshot] =
-    useState<ParticleSnapshot | null>(() =>
-      createParticleSnapshot(world.particles[0]),
-    );
+  const [particleSnapshots, setParticleSnapshots] = useState<
+    ParticleSnapshot[]
+  >(() => createParticleSnapshots(world.particles));
   const timedForcesRef = useRef<TimedForce[]>([]);
 
   useEffect(() => {
@@ -157,7 +156,9 @@ export function SimulationCanvas() {
           const timedForces = timedForcesRef.current;
           for (const timedForce of timedForces) {
             if (timedForce.remainingDuration > 0) {
-              world.particles[0]?.applyForce(timedForce.force);
+              world.particles
+                .find((particle) => particle.id === timedForce.particleId)
+                ?.applyForce(timedForce.force);
               timedForce.remainingDuration = Math.max(
                 0,
                 timedForce.remainingDuration - FIXED_TIMESTEP_SECONDS,
@@ -183,7 +184,7 @@ export function SimulationCanvas() {
       }
 
       // React displays a copy; the World remains the source of truth.
-      setParticleSnapshot(createParticleSnapshot(world.particles[0]));
+      setParticleSnapshots(createParticleSnapshots(world.particles));
 
       animationFrameId = requestAnimationFrame(frame);
     };
@@ -195,6 +196,73 @@ export function SimulationCanvas() {
     };
   }, [isRunning, world]);
 
+  const renderParticleControls = (particleId: number | null) => (
+    <ParticleControls
+      particleId={particleId}
+      onApplyForce={(particleId, forceX, forceY, duration) => {
+        const simulationWorld = worldRef.current;
+        const particle = simulationWorld.particles.find(
+          (item) => item.id === particleId,
+        );
+        if (!particle) {
+          return;
+        }
+
+        const timedForce = {
+          particleId,
+          force: { x: forceX, y: forceY },
+          remainingDuration: Math.max(0, duration),
+        };
+        timedForcesRef.current = [...timedForcesRef.current, timedForce];
+
+        if (!isRunning) {
+          const appliedForce = sumForces(
+            timedForcesRef.current.filter(
+              (force) => force.particleId === particleId,
+            ),
+          );
+
+          setParticleSnapshots((previous) =>
+            previous.map((snapshot) =>
+              snapshot.id === particleId
+                ? { ...snapshot, appliedForce }
+                : snapshot,
+            ),
+          );
+        }
+      }}
+    />
+  );
+
+  const reset = () => {
+    timedForcesRef.current = [];
+    const simulationWorld = worldRef.current;
+    simulationWorld.reset();
+    for (const particle of simulationWorld.particles) {
+      particle.lastAppliedForce = { x: 0, y: 0 };
+    }
+    setParticleSnapshots(createParticleSnapshots(simulationWorld.particles));
+  };
+
+  const addParticle = () => {
+    const simulationWorld = worldRef.current;
+    const nextParticleId =
+      simulationWorld.particles.reduce(
+        (highestId, particle) => Math.max(highestId, particle.id),
+        0,
+      ) + 1;
+    const newParticle = new Particle(
+      nextParticleId,
+      1, // mass
+      { x: Math.random() * CANVAS_WIDTH, y: Math.random() * CANVAS_HEIGHT }, // position
+      { x: 0, y: 0 }, // velocity
+      { x: 0, y: 0 }, // acceleration
+      { x: 0, y: 0 }, // accumulated force
+    );
+    simulationWorld.addParticle(newParticle);
+    setParticleSnapshots(createParticleSnapshots(simulationWorld.particles));
+  };
+
   return (
     <section aria-label="Simulation canvas">
       <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT}>
@@ -204,32 +272,13 @@ export function SimulationCanvas() {
         isRunning={isRunning}
         onStart={() => setIsRunning(true)}
         onStop={() => setIsRunning(false)}
-        reset={() => {
-          timedForcesRef.current = [];
-          world.reset();
-          const particle = world.particles[0];
-          if (particle) {
-            particle.lastAppliedForce = { x: 0, y: 0 };
-          }
-          setParticleSnapshot(createParticleSnapshot(world.particles[0]));
-        }}
-        onApplyForce={(forceX: number, forceY: number, duration: number) => {
-          const timedForce = {
-            force: { x: forceX, y: forceY },
-            remainingDuration: Math.max(0, duration),
-          };
-          timedForcesRef.current = [...timedForcesRef.current, timedForce];
-
-          if (!isRunning) {
-            const snapshot = createParticleSnapshot(world.particles[0]);
-            if (snapshot) {
-              snapshot.appliedForce = sumForces(timedForcesRef.current);
-            }
-            setParticleSnapshot(snapshot);
-          }
-        }}
+        onReset={reset}
+        onAddParticle={addParticle}
       />
-      <ParticleInspector particle={particleSnapshot} />
+      <ParticleInspector
+        particles={particleSnapshots}
+        controls={renderParticleControls}
+      />
     </section>
   );
 }
