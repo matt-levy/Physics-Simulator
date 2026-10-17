@@ -1,8 +1,16 @@
 import type { Particle } from "./Particle";
-import { defaultParticle } from "./Particle";
+
+type ParticleInitialState = {
+  position: Particle["position"];
+  velocity: Particle["velocity"];
+  acceleration: Particle["acceleration"];
+  accumulatedForce: Particle["accumulatedForce"];
+  lastAppliedForce: Particle["lastAppliedForce"];
+};
 
 export class World {
   particles: Particle[] = [];
+  private initialStates = new Map<number, ParticleInitialState>();
 
   constructor(
     public width: number = 800,
@@ -11,6 +19,25 @@ export class World {
 
   addParticle(particle: Particle): void {
     this.particles.push(particle);
+    this.initialStates.set(particle.id, {
+      position: { ...particle.position },
+      velocity: { ...particle.velocity },
+      acceleration: { ...particle.acceleration },
+      accumulatedForce: { ...particle.accumulatedForce },
+      lastAppliedForce: { ...particle.lastAppliedForce },
+    });
+  }
+
+  removeParticle(particleId: number): void {
+    this.particles = this.particles.filter(
+      (particle) => particle.id !== particleId,
+    );
+    this.initialStates.delete(particleId);
+  }
+
+  removeAllParticles(): void {
+    this.particles = [];
+    this.initialStates.clear();
   }
 
   update(dt: number): void {
@@ -22,10 +49,14 @@ export class World {
 
   reset(): void {
     this.particles.forEach((particle) => {
-      particle.setPosition(defaultParticle.position);
-      particle.setVelocity(defaultParticle.velocity);
-      particle.setAcceleration(defaultParticle.acceleration);
-      particle.setAccumulatedForce(defaultParticle.accumulatedForce);
+      const initialState = this.initialStates.get(particle.id);
+      if (!initialState) return;
+
+      particle.setPosition({ ...initialState.position });
+      particle.setVelocity({ ...initialState.velocity });
+      particle.setAcceleration({ ...initialState.acceleration });
+      particle.setAccumulatedForce({ ...initialState.accumulatedForce });
+      particle.lastAppliedForce = { ...initialState.lastAppliedForce };
     });
   }
 

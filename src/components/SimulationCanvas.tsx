@@ -7,20 +7,25 @@ import { ParticleControls } from "./ParticleControls";
 import { Particle } from "@/physics/Particle";
 import { ParticleInspector, type ParticleSnapshot } from "./ParticleInspector";
 import { Vector2 } from "@/physics/Vector2";
+import {
+  useSimulationPersistence,
+  type SavedTimedForce,
+} from "@/hooks/useSimulationPersistence";
 
 const FIXED_TIMESTEP_SECONDS = 1 / 60;
 const MAX_STEPS_PER_FRAME = 5;
 const GRID_SPACING_PIXELS = 50;
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 500;
+const PARTICLE_COLOR = "#166b50";
+const SELECTED_PARTICLE_COLOR = "#e9a54a";
+const SELECTED_PARTICLE_OUTLINE = "#8a4b12";
 
-type TimedForce = {
-  particleId: number;
-  force: Vector2;
-  remainingDuration: number;
-};
+function formatForce(value: number): string {
+  return Number(value.toFixed(2)).toString();
+}
 
-function sumForces(forces: TimedForce[]): Vector2 {
+function sumForces(forces: SavedTimedForce[]): Vector2 {
   return forces.reduce(
     (total, entry) => ({
       x: total.x + entry.force.x,
@@ -82,6 +87,7 @@ function drawWorld(
   context: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
   world: World,
+  selectedParticleId: number | null,
 ): void {
   context.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid(context, canvas.width, canvas.height);
@@ -96,8 +102,15 @@ function drawWorld(
       0,
       2 * Math.PI,
     );
-    context.fillStyle = "blue";
+    const isSelected = particle.id === selectedParticleId;
+    context.fillStyle = isSelected ? SELECTED_PARTICLE_COLOR : PARTICLE_COLOR;
     context.fill();
+
+    if (isSelected) {
+      context.lineWidth = 2;
+      context.strokeStyle = SELECTED_PARTICLE_OUTLINE;
+      context.stroke();
+    }
   }
 }
 
@@ -111,7 +124,7 @@ export function SimulationCanvas() {
       { x: 400, y: 250 }, // position
       { x: 0, y: 0 }, // velocity
       { x: 0, y: 0 }, // acceleration
-      { x: 1000, y: 0 }, // accumulated force
+      { x: 0, y: 0 }, // accumulated force
     );
     initialWorld.addParticle(initialParticle);
     return initialWorld;
@@ -119,19 +132,47 @@ export function SimulationCanvas() {
   const worldRef = useRef(world);
 
   const [isRunning, setIsRunning] = useState(false);
+  const [worldRevision, setWorldRevision] = useState(0);
   const [particleSnapshots, setParticleSnapshots] = useState<
     ParticleSnapshot[]
   >(() => createParticleSnapshots(world.particles));
-  const timedForcesRef = useRef<TimedForce[]>([]);
+  const [selectedParticleId, setSelectedParticleId] = useState<number | null>(
+    () => world.particles[0]?.id ?? null,
+  );
+  const timedForcesRef = useRef<SavedTimedForce[]>([]);
+  const nextTimedForceIdRef = useRef(1);
+  const [activeForces, setActiveForces] = useState<SavedTimedForce[]>([]);
+  const { isReady: storageReady, restoredTimedForces } = useSimulationPersistence({
+    world,
+    isRunning,
+    worldRevision,
+    timedForcesRef,
+  });
+
+  useEffect(() => {
+    if (!storageReady) return;
+
+    timedForcesRef.current = restoredTimedForces.map((timedForce) => ({
+      ...timedForce,
+      force: { ...timedForce.force },
+    }));
+    setActiveForces(timedForcesRef.current);
+    nextTimedForceIdRef.current =
+      Math.max(0, ...timedForcesRef.current.map((timedForce) => timedForce.id)) +
+      1;
+    setParticleSnapshots(createParticleSnapshots(world.particles));
+    setSelectedParticleId(world.particles[0]?.id ?? null);
+    setWorldRevision((revision) => revision + 1);
+  }, [restoredTimedForces, storageReady, world]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
 
     if (canvas && context) {
-      drawWorld(context, canvas, world);
+      drawWorld(context, canvas, world, selectedParticleId);
     }
-  }, [world]);
+  }, [world, worldRevision, selectedParticleId]);
 
   useEffect(() => {
     if (!isRunning) {
@@ -142,7 +183,20 @@ export function SimulationCanvas() {
     let previousTimestamp: number | null = null;
     let accumulatedTime = 0;
 
+    const resetFrameClock = () => {
+      previousTimestamp = null;
+      accumulatedTime = 0;
+    };
+
+    document.addEventListener("visibilitychange", resetFrameClock);
+
     const frame = (timestamp: number) => {
+      if (document.hidden) {
+        resetFrameClock();
+        animationFrameId = requestAnimationFrame(frame);
+        return;
+      }
+
       if (previousTimestamp !== null) {
         const elapsedSeconds = (timestamp - previousTimestamp) / 1000;
         accumulatedTime += elapsedSeconds;
@@ -180,11 +234,17 @@ export function SimulationCanvas() {
       const context = canvas?.getContext("2d");
 
       if (canvas && context) {
-        drawWorld(context, canvas, world);
+        drawWorld(context, canvas, world, selectedParticleId);
       }
 
       // React displays a copy; the World remains the source of truth.
       setParticleSnapshots(createParticleSnapshots(world.particles));
+      setActiveForces(
+        timedForcesRef.current.map((timedForce) => ({
+          ...timedForce,
+          force: { ...timedForce.force },
+        })),
+      );
 
       animationFrameId = requestAnimationFrame(frame);
     };
@@ -193,8 +253,9 @@ export function SimulationCanvas() {
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      document.removeEventListener("visibilitychange", resetFrameClock);
     };
-  }, [isRunning, world]);
+  }, [isRunning, selectedParticleId, world]);
 
   const renderParticleControls = (particleId: number | null) => (
     <ParticleControls
@@ -209,11 +270,20 @@ export function SimulationCanvas() {
         }
 
         const timedForce = {
+          id: nextTimedForceIdRef.current++,
           particleId,
           force: { x: forceX, y: forceY },
           remainingDuration: Math.max(0, duration),
+          totalDuration: Math.max(0, duration),
         };
         timedForcesRef.current = [...timedForcesRef.current, timedForce];
+        setWorldRevision((revision) => revision + 1);
+        setActiveForces(
+          timedForcesRef.current.map((force) => ({
+            ...force,
+            force: { ...force.force },
+          })),
+        );
 
         if (!isRunning) {
           const appliedForce = sumForces(
@@ -236,12 +306,11 @@ export function SimulationCanvas() {
 
   const reset = () => {
     timedForcesRef.current = [];
+    setActiveForces([]);
     const simulationWorld = worldRef.current;
     simulationWorld.reset();
-    for (const particle of simulationWorld.particles) {
-      particle.lastAppliedForce = { x: 0, y: 0 };
-    }
     setParticleSnapshots(createParticleSnapshots(simulationWorld.particles));
+    setWorldRevision((revision) => revision + 1);
   };
 
   const addParticle = () => {
@@ -260,25 +329,132 @@ export function SimulationCanvas() {
       { x: 0, y: 0 }, // accumulated force
     );
     simulationWorld.addParticle(newParticle);
+    if (selectedParticleId === null) {
+      setSelectedParticleId(nextParticleId);
+    }
     setParticleSnapshots(createParticleSnapshots(simulationWorld.particles));
+    setWorldRevision((revision) => revision + 1);
+  };
+
+  const removeParticle = (particleId: number) => {
+    const simulationWorld = worldRef.current;
+    simulationWorld.removeParticle(particleId);
+    timedForcesRef.current = timedForcesRef.current.filter(
+      (timedForce) => timedForce.particleId !== particleId,
+    );
+    setActiveForces(
+      timedForcesRef.current.map((timedForce) => ({
+        ...timedForce,
+        force: { ...timedForce.force },
+      })),
+    );
+
+    if (selectedParticleId === particleId) {
+      setSelectedParticleId(simulationWorld.particles[0]?.id ?? null);
+    }
+
+    setParticleSnapshots(createParticleSnapshots(simulationWorld.particles));
+    setWorldRevision((revision) => revision + 1);
+  };
+
+  const removeAllParticles = () => {
+    const simulationWorld = worldRef.current;
+    simulationWorld.removeAllParticles();
+    timedForcesRef.current = [];
+    setActiveForces([]);
+    setSelectedParticleId(null);
+    setParticleSnapshots([]);
+    setWorldRevision((revision) => revision + 1);
   };
 
   return (
-    <section aria-label="Simulation canvas">
-      <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT}>
-        Your browser does not support the canvas element.
-      </canvas>
-      <SimulationControls
-        isRunning={isRunning}
-        onStart={() => setIsRunning(true)}
-        onStop={() => setIsRunning(false)}
-        onReset={reset}
-        onAddParticle={addParticle}
-      />
-      <ParticleInspector
-        particles={particleSnapshots}
-        controls={renderParticleControls}
-      />
-    </section>
+    <div className="simulation-layout">
+      <section className="panel simulation-panel" aria-label="Simulation">
+        <div className="panel-heading">
+          <h2>Live simulation</h2>
+          <span className="panel-kicker">WORLD · 800 × 500</span>
+        </div>
+        <div className="canvas-wrap">
+          <canvas
+            ref={canvasRef}
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            role="img"
+            aria-label="A 2D physics world showing particles moving and bouncing off the borders"
+          >
+            Your browser does not support the canvas element.
+          </canvas>
+        </div>
+        <div className="canvas-caption">
+          <span>World origin at bottom left · positive y points up</span>
+          <span>1 px / unit</span>
+        </div>
+        <SimulationControls
+          isRunning={isRunning}
+          onStart={() => setIsRunning(true)}
+          onStop={() => setIsRunning(false)}
+          onReset={reset}
+          onAddParticle={addParticle}
+        />
+      </section>
+      <section
+        className="panel inspector-panel"
+        aria-label="Particle inspector"
+      >
+        <ParticleInspector
+          particles={particleSnapshots}
+          selectedParticleId={selectedParticleId}
+          onSelectParticle={setSelectedParticleId}
+          onRemoveParticle={removeParticle}
+          onRemoveAllParticles={removeAllParticles}
+          controls={renderParticleControls}
+        />
+      </section>
+      <section className="panel force-panel" aria-labelledby="forces-heading">
+        <div className="panel-heading">
+          <h2 id="forces-heading">Applied forces</h2>
+          <span className="panel-kicker">{activeForces.length} ACTIVE</span>
+        </div>
+        {activeForces.length > 0 ? (
+          <ul className="active-force-list">
+            {activeForces.map((timedForce) => {
+              const progress = Math.min(
+                100,
+                (timedForce.remainingDuration / timedForce.totalDuration) * 100,
+              );
+
+              return (
+                <li className="active-force" key={timedForce.id}>
+                  <div className="active-force-topline">
+                    <strong>Particle {timedForce.particleId}</strong>
+                    <span className="force-time">
+                      {timedForce.remainingDuration.toFixed(2)} s
+                    </span>
+                  </div>
+                  <p>
+                    F = ({formatForce(timedForce.force.x)},{" "}
+                    {formatForce(timedForce.force.y)}) N
+                  </p>
+                  <div
+                    className="force-progress-track"
+                    role="progressbar"
+                    aria-label={`Force duration remaining for particle ${timedForce.particleId}`}
+                    aria-valuemin={0}
+                    aria-valuemax={timedForce.totalDuration}
+                    aria-valuenow={timedForce.remainingDuration}
+                  >
+                    <span style={{ width: `${progress}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="empty-forces">
+            No active forces. Apply one to a particle to see its countdown here.
+          </p>
+        )}
+      </section>
+    </div>
   );
 }

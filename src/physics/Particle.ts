@@ -76,5 +76,5 @@ export const defaultParticle = new Particle(
   { x: 400, y: 250 }, // position
   { x: 0, y: 0 }, // velocity
   { x: 0, y: 0 }, // acceleration
-  { x: 1000, y: 0 }, // accumulated force
+  { x: 0, y: 0 }, // accumulated force
 );

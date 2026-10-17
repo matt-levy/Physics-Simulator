@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Classical Mechanics Simulator",
-  description: "A small 2D classical mechanics simulator.",
+  title: "Motion Lab | Classical Mechanics",
+  description:
+    "Explore Newtonian motion in an interactive 2D physics playground.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

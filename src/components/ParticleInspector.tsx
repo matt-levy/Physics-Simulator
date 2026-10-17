@@ -1,5 +1,5 @@
 import type { Vector2 } from "@/physics/Vector2";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export type ParticleSnapshot = {
   id: number;
@@ -12,6 +12,10 @@ export type ParticleSnapshot = {
 
 type ParticleInspectorProps = {
   particles: ParticleSnapshot[];
+  selectedParticleId: number | null;
+  onSelectParticle: (particleId: number) => void;
+  onRemoveParticle: (particleId: number) => void;
+  onRemoveAllParticles: () => void;
   controls: (particleId: number | null) => ReactNode;
 };
 
@@ -21,18 +25,43 @@ function formatVector(vector: Vector2): string {
 
 export function ParticleInspector({
   particles,
+  selectedParticleId,
+  onSelectParticle,
+  onRemoveParticle,
+  onRemoveAllParticles,
   controls,
 }: ParticleInspectorProps) {
-  const [selectedParticleId, setSelectedParticleId] = useState<number | null>(
-    () => particles[0]?.id ?? null,
-  );
   const selectedParticle =
     particles.find((particle) => particle.id === selectedParticleId) ?? null;
 
   return (
     <section className="particle-inspector" aria-label="Particle inspector">
       <div className="particle-list">
-        <h2>Particles</h2>
+        <div className="particle-list-heading">
+          <h2>Particles <span>{particles.length}</span></h2>
+          <div className="particle-actions">
+            <button
+              type="button"
+              className="danger-action"
+              disabled={selectedParticleId === null}
+              onClick={() => {
+                if (selectedParticleId !== null) {
+                  onRemoveParticle(selectedParticleId);
+                }
+              }}
+            >
+              Remove selected
+            </button>
+            <button
+              type="button"
+              className="danger-action"
+              disabled={particles.length === 0}
+              onClick={onRemoveAllParticles}
+            >
+              Remove all
+            </button>
+          </div>
+        </div>
         {particles.length > 0 ? (
           <ul className="particle-list-items">
             {particles.map((particle) => (
@@ -43,7 +72,7 @@ export function ParticleInspector({
                     particle.id === selectedParticleId ? "is-selected" : ""
                   }
                   aria-pressed={particle.id === selectedParticleId}
-                  onClick={() => setSelectedParticleId(particle.id)}
+                  onClick={() => onSelectParticle(particle.id)}
                 >
                   Particle {particle.id}
                 </button>
