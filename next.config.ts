@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: "export",
+  ...(process.env.GITHUB_PAGES === "true" ? { basePath: "/physics-sim" } : {}),
 };
 
 export default nextConfig;
