@@ -4,7 +4,7 @@ An interactive 2D classical mechanics playground built with Next.js, React, and 
 
 ## Live site
 
-[Open Motion Lab](https://matt-levy.github.io/physics-sim/)
+[Open Motion Lab](https://matt-levy.github.io/Physics-Simulator/)
 
 ## Run locally
 
