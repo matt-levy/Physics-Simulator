@@ -71,8 +71,8 @@ function isSavedParticle(value: unknown): value is SavedParticle {
     typeof particle.id === "number" &&
     Number.isInteger(particle.id) &&
     particle.id > 0 &&
-    isParticleState(particle) &&
-    isParticleState(particle.initialState)
+    isParticleState(particle.initialState) &&
+    isParticleState(particle)
   );
 }
 
