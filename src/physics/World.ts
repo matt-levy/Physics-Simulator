@@ -1,6 +1,8 @@
 import type { Particle } from "./Particle";
 
-type ParticleInitialState = {
+export type ParticleState = {
+  mass: number;
+  radius: number;
   position: Particle["position"];
   velocity: Particle["velocity"];
   acceleration: Particle["acceleration"];
@@ -10,22 +12,19 @@ type ParticleInitialState = {
 
 export class World {
   particles: Particle[] = [];
-  private initialStates = new Map<number, ParticleInitialState>();
+  private initialStates = new Map<number, ParticleState>();
 
   constructor(
     public width: number = 800,
     public height: number = 500,
   ) {}
 
-  addParticle(particle: Particle): void {
+  addParticle(
+    particle: Particle,
+    initialState = this.captureState(particle),
+  ): void {
     this.particles.push(particle);
-    this.initialStates.set(particle.id, {
-      position: { ...particle.position },
-      velocity: { ...particle.velocity },
-      acceleration: { ...particle.acceleration },
-      accumulatedForce: { ...particle.accumulatedForce },
-      lastAppliedForce: { ...particle.lastAppliedForce },
-    });
+    this.initialStates.set(particle.id, this.cloneState(initialState));
   }
 
   removeParticle(particleId: number): void {
@@ -52,12 +51,43 @@ export class World {
       const initialState = this.initialStates.get(particle.id);
       if (!initialState) return;
 
+      particle.mass = initialState.mass;
+      particle.radius = initialState.radius;
       particle.setPosition({ ...initialState.position });
       particle.setVelocity({ ...initialState.velocity });
       particle.setAcceleration({ ...initialState.acceleration });
       particle.setAccumulatedForce({ ...initialState.accumulatedForce });
       particle.lastAppliedForce = { ...initialState.lastAppliedForce };
     });
+  }
+
+  getInitialState(particleId: number): ParticleState | undefined {
+    const initialState = this.initialStates.get(particleId);
+    return initialState ? this.cloneState(initialState) : undefined;
+  }
+
+  private captureState(particle: Particle): ParticleState {
+    return {
+      mass: particle.mass,
+      radius: particle.radius,
+      position: { ...particle.position },
+      velocity: { ...particle.velocity },
+      acceleration: { ...particle.acceleration },
+      accumulatedForce: { ...particle.accumulatedForce },
+      lastAppliedForce: { ...particle.lastAppliedForce },
+    };
+  }
+
+  private cloneState(state: ParticleState): ParticleState {
+    return {
+      mass: state.mass,
+      radius: state.radius,
+      position: { ...state.position },
+      velocity: { ...state.velocity },
+      acceleration: { ...state.acceleration },
+      accumulatedForce: { ...state.accumulatedForce },
+      lastAppliedForce: { ...state.lastAppliedForce },
+    };
   }
 
   // General collision entry point for the world's collision scenarios.

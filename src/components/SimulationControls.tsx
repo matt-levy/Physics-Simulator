@@ -21,8 +21,13 @@ export function SimulationControls({
       <button type="button" disabled={!isRunning} onClick={onStop}>
         Stop
       </button>
-      <button type="button" onClick={onReset}>
-        Reset
+      <button
+        type="button"
+        className="reset-tooltip"
+        data-tooltip="Restores particles to their starting states."
+        onClick={onReset}
+      >
+        Reset simulation
       </button>
       <button type="button" onClick={onAddParticle}>
         Add Particle

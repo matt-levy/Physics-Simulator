@@ -146,6 +146,9 @@ h1 {
   background: var(--card);
   box-shadow: 0 10px 30px rgb(28 54 42 / 4%);
 }
+.simulation-panel {
+  overflow: visible;
+}
 .inspector-panel {
   height: 100%;
 }
@@ -221,6 +224,50 @@ button:active:not(:disabled) {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
+}
+.reset-tooltip {
+  position: relative;
+}
+.reset-tooltip::before,
+.reset-tooltip::after {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.reset-tooltip::after {
+  content: attr(data-tooltip);
+  bottom: calc(100% + 9px);
+  left: 50%;
+  width: max-content;
+  max-width: min(240px, 75vw);
+  padding: 9px 11px;
+  transform: translate(-50%, 4px);
+  border-radius: 8px;
+  background: var(--ink);
+  box-shadow: 0 5px 16px rgb(23 35 31 / 18%);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  white-space: normal;
+}
+.reset-tooltip::before {
+  content: "";
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  border: 6px solid transparent;
+  border-top-color: var(--ink);
+}
+.reset-tooltip:hover::before,
+.reset-tooltip:hover::after {
+  transform: translate(-50%, 0);
+  opacity: 1;
 }
 [aria-label="Simulation controls"] button:first-child {
   border-color: var(--green);

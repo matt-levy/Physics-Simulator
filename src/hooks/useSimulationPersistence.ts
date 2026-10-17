@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Particle } from "@/physics/Particle";
 import type { Vector2 } from "@/physics/Vector2";
-import type { World } from "@/physics/World";
+import type { ParticleState, World } from "@/physics/World";
 
 const STORAGE_KEY = "physics-sim:state";
 const LEGACY_STORAGE_KEY = "physics-sim:positions";
@@ -16,20 +16,22 @@ export type SavedTimedForce = {
   totalDuration: number;
 };
 
-type SavedParticle = {
+type SavedParticle = ParticleState & {
   id: number;
-  mass: number;
-  radius: number;
-  position: Vector2;
-  velocity: Vector2;
-  acceleration: Vector2;
-  accumulatedForce: Vector2;
-  lastAppliedForce: Vector2;
+  initialState: ParticleState;
 };
 
 type SavedSimulation = {
-  version: 2;
+  version: 3;
   particles: SavedParticle[];
+  timedForces: SavedTimedForce[];
+};
+
+type VersionTwoParticle = ParticleState & { id: number };
+
+type VersionTwoSavedSimulation = {
+  version: 2;
+  particles: VersionTwoParticle[];
   timedForces: SavedTimedForce[];
 };
 
@@ -69,17 +71,27 @@ function isSavedParticle(value: unknown): value is SavedParticle {
     typeof particle.id === "number" &&
     Number.isInteger(particle.id) &&
     particle.id > 0 &&
-    typeof particle.mass === "number" &&
-    Number.isFinite(particle.mass) &&
-    particle.mass > 0 &&
-    typeof particle.radius === "number" &&
-    Number.isFinite(particle.radius) &&
-    particle.radius > 0 &&
-    isVector2(particle.position) &&
-    isVector2(particle.velocity) &&
-    isVector2(particle.acceleration) &&
-    isVector2(particle.accumulatedForce) &&
-    isVector2(particle.lastAppliedForce)
+    isParticleState(particle) &&
+    isParticleState(particle.initialState)
+  );
+}
+
+function isParticleState(value: unknown): value is ParticleState {
+  if (typeof value !== "object" || value === null) return false;
+
+  const state = value as Partial<ParticleState>;
+  return (
+    typeof state.mass === "number" &&
+    Number.isFinite(state.mass) &&
+    state.mass > 0 &&
+    typeof state.radius === "number" &&
+    Number.isFinite(state.radius) &&
+    state.radius > 0 &&
+    isVector2(state.position) &&
+    isVector2(state.velocity) &&
+    isVector2(state.acceleration) &&
+    isVector2(state.accumulatedForce) &&
+    isVector2(state.lastAppliedForce)
   );
 }
 
@@ -114,9 +126,40 @@ function isSavedSimulation(value: unknown): value is SavedSimulation {
     timedForces?: unknown;
   };
   return (
-    saved.version === 2 &&
+    saved.version === 3 &&
     Array.isArray(saved.particles) &&
     saved.particles.every(isSavedParticle) &&
+    Array.isArray(saved.timedForces) &&
+    saved.timedForces.every(isSavedTimedForce)
+  );
+}
+
+function isVersionTwoParticle(value: unknown): value is VersionTwoParticle {
+  if (typeof value !== "object" || value === null) return false;
+
+  const particle = value as { id?: unknown };
+  return (
+    typeof particle.id === "number" &&
+    Number.isInteger(particle.id) &&
+    particle.id > 0 &&
+    isParticleState(value)
+  );
+}
+
+function isVersionTwoSavedSimulation(
+  value: unknown,
+): value is VersionTwoSavedSimulation {
+  if (typeof value !== "object" || value === null) return false;
+
+  const saved = value as {
+    version?: unknown;
+    particles?: unknown;
+    timedForces?: unknown;
+  };
+  return (
+    saved.version === 2 &&
+    Array.isArray(saved.particles) &&
+    saved.particles.every(isVersionTwoParticle) &&
     Array.isArray(saved.timedForces) &&
     saved.timedForces.every(isSavedTimedForce)
   );
@@ -152,7 +195,7 @@ function migrateLegacySnapshot(
   legacy: LegacySavedSimulation,
 ): SavedSimulation {
   return {
-    version: 2,
+    version: 3,
     particles: legacy.particles.map(({ id, x, y }) => ({
       id,
       mass: 1,
@@ -162,8 +205,38 @@ function migrateLegacySnapshot(
       acceleration: { x: 0, y: 0 },
       accumulatedForce: { x: 0, y: 0 },
       lastAppliedForce: { x: 0, y: 0 },
+      initialState: {
+        mass: 1,
+        radius: 5,
+        position: { x, y },
+        velocity: { x: 0, y: 0 },
+        acceleration: { x: 0, y: 0 },
+        accumulatedForce: { x: 0, y: 0 },
+        lastAppliedForce: { x: 0, y: 0 },
+      },
     })),
     timedForces: [],
+  };
+}
+
+function migrateVersionTwoSnapshot(
+  legacy: VersionTwoSavedSimulation,
+): SavedSimulation {
+  return {
+    version: 3,
+    particles: legacy.particles.map((particle) => ({
+      ...particle,
+      initialState: {
+        mass: particle.mass,
+        radius: particle.radius,
+        position: { ...particle.position },
+        velocity: { x: 0, y: 0 },
+        acceleration: { x: 0, y: 0 },
+        accumulatedForce: { x: 0, y: 0 },
+        lastAppliedForce: { x: 0, y: 0 },
+      },
+    })),
+    timedForces: legacy.timedForces,
   };
 }
 
@@ -190,11 +263,14 @@ export function useSimulationPersistence({
         window.localStorage.getItem(LEGACY_STORAGE_KEY);
       if (savedText) {
         const parsed: unknown = JSON.parse(savedText);
-        const savedSimulation = isSavedSimulation(parsed)
-          ? parsed
-          : isLegacySavedSimulation(parsed)
-            ? migrateLegacySnapshot(parsed)
-            : null;
+        let savedSimulation: SavedSimulation | null = null;
+        if (isSavedSimulation(parsed)) {
+          savedSimulation = parsed;
+        } else if (isVersionTwoSavedSimulation(parsed)) {
+          savedSimulation = migrateVersionTwoSnapshot(parsed);
+        } else if (isLegacySavedSimulation(parsed)) {
+          savedSimulation = migrateLegacySnapshot(parsed);
+        }
 
         if (savedSimulation) {
           world.removeAllParticles();
@@ -210,6 +286,7 @@ export function useSimulationPersistence({
                 savedParticle.radius,
                 { ...savedParticle.lastAppliedForce },
               ),
+              savedParticle.initialState,
             );
           }
 
@@ -237,7 +314,7 @@ export function useSimulationPersistence({
 
     const saveSimulation = () => {
       const snapshot: SavedSimulation = {
-        version: 2,
+        version: 3,
         particles: world.particles.map((particle) => ({
           id: particle.id,
           mass: particle.mass,
@@ -247,6 +324,15 @@ export function useSimulationPersistence({
           acceleration: { ...particle.acceleration },
           accumulatedForce: { ...particle.accumulatedForce },
           lastAppliedForce: { ...particle.lastAppliedForce },
+          initialState: world.getInitialState(particle.id) ?? {
+            mass: particle.mass,
+            radius: particle.radius,
+            position: { ...particle.position },
+            velocity: { ...particle.velocity },
+            acceleration: { ...particle.acceleration },
+            accumulatedForce: { ...particle.accumulatedForce },
+            lastAppliedForce: { ...particle.lastAppliedForce },
+          },
         })),
         timedForces: timedForcesRef.current.map((timedForce) => ({
           ...timedForce,

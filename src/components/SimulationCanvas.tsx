@@ -305,6 +305,7 @@ export function SimulationCanvas() {
   );
 
   const reset = () => {
+    setIsRunning(false);
     timedForcesRef.current = [];
     setActiveForces([]);
     const simulationWorld = worldRef.current;
