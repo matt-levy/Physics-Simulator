@@ -2,6 +2,10 @@
 
 An interactive 2D classical mechanics playground built with Next.js, React, and TypeScript. Add particles, apply timed forces, and inspect how their motion changes over time.
 
+## Live site
+
+[Open Motion Lab](https://matt-levy.github.io/physics-sim/)
+
 ## Run locally
 
 ```bash
